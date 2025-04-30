@@ -74,9 +74,13 @@ public class AuthController {
     private void setTokenCookie(HttpServletResponse response, String token) {
         Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
+        cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setMaxAge((int) Duration.ofDays(1).getSeconds());
-        cookie.setSecure(true);
-        response.addCookie(cookie);
+
+        response.setHeader("Set-Cookie", String.format(
+                "token=%s; Max-Age=%d; Path=/; HttpOnly; Secure; SameSite=None",
+                token, (int) Duration.ofDays(1).getSeconds()
+        ));
     }
 }
