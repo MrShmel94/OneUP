@@ -1,0 +1,47 @@
+# === Java build system ===
+.gradle/
+build/
+
+# === Gradle Wrapper ===
+!gradle/wrapper/gradle-wrapper.jar
+
+# === Spring Boot ===
+src/main/resources/application.properties
+src/main/resources/firebase-service-account.json
+
+# === IDEs ===
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+out/
+bin/
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans/
+.sts4-cache/
+src/main/resources/.env
+
+# === NetBeans ===
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# === Logs and temp ===
+*.log
+*.tmp
+*.bak
+*.swp
+
+# === OS files ===
+.DS_Store
+Thumbs.db
+
+# === Help file ===
+HELP.md

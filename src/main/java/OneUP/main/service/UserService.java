@@ -1,0 +1,16 @@
+package OneUP.main.service;
+
+
+import OneUP.main.model.AppUser;
+import OneUP.main.request.ConfirmRequest;
+import OneUP.main.request.LoginRequest;
+import OneUP.main.request.RegisterRequest;
+
+public interface UserService {
+
+    void registerUser(RegisterRequest dto);
+    AppUser getUser(String nickname);
+    boolean passwordMatches(String rawPassword, String encodedPassword);
+    String login(LoginRequest dto);
+    String confirmUser(ConfirmRequest requestModel);
+}
