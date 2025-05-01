@@ -21,14 +21,14 @@ public class GuildMemberController {
     }
 
     @GetMapping("/banned/{nickname}")
-    public ResponseEntity<Void> confirm(@PathVariable String nickname) {
+    public ResponseEntity<Void> banned(@PathVariable String nickname) {
         userService.banned(nickname);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/unbanned/{nickname}")
-    public ResponseEntity<Void> confirm(@PathVariable String nickname) {
-        userService.banned(nickname);
+    public ResponseEntity<Void> unbanned(@PathVariable String nickname) {
+        userService.unbanned(nickname);
         return ResponseEntity.noContent().build();
     }
 }
