@@ -58,7 +58,7 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletResponse response) {
-        ResponseCookie cookie = ResponseCookie.from("token", "")
+        ResponseCookie cookieStrict = ResponseCookie.from("token", "")
                 .httpOnly(true)
                 .secure(true)
                 .sameSite("Strict")
@@ -66,7 +66,17 @@ public class AuthController {
                 .maxAge(0)
                 .build();
 
-        response.setHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        ResponseCookie cookieNone = ResponseCookie.from("token", "")
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("None")
+                .path("/")
+                .maxAge(0)
+                .build();
+
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieStrict.toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieNone.toString());
+
         return ResponseEntity.ok("Logged out");
     }
 
