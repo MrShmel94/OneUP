@@ -13,4 +13,9 @@ public interface UserService {
     boolean passwordMatches(String rawPassword, String encodedPassword);
     String login(LoginRequest dto);
     String confirmUser(ConfirmRequest requestModel);
+    String checkAccess(String nickname);
+    void changeUserRole(String nickname, String newRole);
+
+    void banned (String nickname);
+    void unbanned (String nickname);
 }

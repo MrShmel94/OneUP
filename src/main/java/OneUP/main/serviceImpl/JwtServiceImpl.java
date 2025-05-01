@@ -8,6 +8,7 @@ import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -29,15 +30,17 @@ public class JwtServiceImpl implements JwtService {
     private final Duration tokenLifetime = Duration.ofDays(1);
 
     private final HttpServletRequest request;
+    private final HttpServletResponse response;
 
     @PostConstruct
     public void init() {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateToken(String username) {
+    public String generateToken(String username, String role) {
         Claims claims = Jwts.claims()
                 .subject(username)
+                .add("role", role)
                 .build();
 
         return Jwts.builder()
@@ -46,6 +49,10 @@ public class JwtServiceImpl implements JwtService {
                 .expiration(new Date(System.currentTimeMillis() + tokenLifetime.toMillis()))
                 .signWith(key, Jwts.SIG.HS256)
                 .compact();
+    }
+
+    public String generateToken(String username) {
+        return generateToken(username, "USER");
     }
 
     public boolean isTokenValid(String token) {
@@ -85,5 +92,32 @@ public class JwtServiceImpl implements JwtService {
                 .parseSignedClaims(token)
                 .getPayload()
                 .getSubject();
+    }
+
+    public String extractRole(String token) {
+        return (String) Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("role");
+    }
+
+    public void setJwtCookieInResponse(String token) {
+        Cookie cookie = new Cookie("token", token);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/");
+        cookie.setMaxAge((int) tokenLifetime.getSeconds());
+        response.addCookie(cookie);
+    }
+
+    public void clearJwtFromResponse() {
+        Cookie cookie = new Cookie("token", null);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
     }
 }

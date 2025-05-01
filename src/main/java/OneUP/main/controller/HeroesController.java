@@ -43,6 +43,15 @@ public class HeroesController {
         }
     }
 
+    @GetMapping("/getAllGuildHeroes")
+    public ResponseEntity<?> getAllGuildHeroes() {
+        try {
+            return ResponseEntity.ok(heroesService.getAllGuildHeroes());
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Failed to fetch heroes");
+        }
+    }
+
     @PostMapping("/save")
     public ResponseEntity<?> saveHeroes(@RequestBody Map<String, Map<String, String>> heroes) {
         try {

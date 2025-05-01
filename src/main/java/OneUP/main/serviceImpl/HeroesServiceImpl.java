@@ -2,12 +2,15 @@ package OneUP.main.serviceImpl;
 
 import OneUP.main.service.HeroesService;
 import OneUP.main.service.JwtService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.firebase.cloud.FirestoreClient;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
@@ -18,11 +21,17 @@ import java.util.concurrent.ExecutionException;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class HeroesServiceImpl implements HeroesService {
 
     private final Firestore firestore = FirestoreClient.getFirestore();
     private final JwtService jwtService;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final ObjectMapper objectMapper;
+
+
     private static final String COLLECTION = "heroes";
+    private static final String REDIS_KEY = "heroes";
 
     @Override
     public void savePlayerHeroes(String nickname, Map<String, Map<String, String>> heroes) throws ExecutionException, InterruptedException, BadRequestException {
@@ -34,24 +43,45 @@ public class HeroesServiceImpl implements HeroesService {
             }
         }
 
+        String key = nickname.toLowerCase();
+
         firestore.collection(COLLECTION)
-                .document(nickname.toLowerCase())
+                .document(key)
                 .set(heroes)
                 .get();
+
+        redisTemplate.opsForHash().put(REDIS_KEY, key, heroes);
     }
 
     @Override
-    public Map<String, Map<String, String>> getPlayerHeroes(String nickname) throws ExecutionException, InterruptedException, BadRequestException {
+    public Map<String, Map<String, String>> getPlayerHeroes(String nickname)
+            throws ExecutionException, InterruptedException, BadRequestException {
 
-        if(nickname == null || nickname.isEmpty()) {
+        if (nickname == null || nickname.isEmpty()) {
             nickname = jwtService.extractUsername(jwtService.extractTokenFromRequest());
-            if(nickname == null || nickname.isEmpty()) {
+            if (nickname == null || nickname.isEmpty()) {
                 throw new BadRequestException("Nickname cannot be empty");
             }
         }
 
+        String key = nickname.toLowerCase();
+
+        try {
+            Object cached = redisTemplate.opsForHash().get(REDIS_KEY, key);
+
+            if (cached != null) {
+                Map<String, Map<String, String>> heroes = objectMapper.convertValue(
+                        cached,
+                        new TypeReference<>() {}
+                );
+                return heroes;
+            }
+        } catch (Exception e) {
+            log.warn("Redis unavailable or error while reading heroes for '{}': {}", key, e.getMessage());
+        }
+
         DocumentSnapshot snapshot = firestore.collection(COLLECTION)
-                .document(nickname.toLowerCase())
+                .document(key)
                 .get()
                 .get();
 
@@ -70,6 +100,61 @@ public class HeroesServiceImpl implements HeroesService {
             }
 
             result.put(heroId, parsedSkills);
+        }
+
+        try {
+            redisTemplate.opsForHash().put(REDIS_KEY, key, result);
+        } catch (Exception e) {
+            log.warn("Redis unavailable — skipping cache save for '{}'", key);
+        }
+
+        return result;
+    }
+
+    @Override
+    public Map<String, Map<String, Map<String, String>>> getAllGuildHeroes() throws BadRequestException, ExecutionException, InterruptedException {
+        Map<String, Map<String, Object>> guildMembers;
+        Map<String, Map<String, Map<String, String>>> result = new HashMap<>();
+
+        Map<Object, Object> cachedMembers = redisTemplate.opsForHash().entries("guild:members");
+        if (cachedMembers.isEmpty()) {
+            try {
+                DocumentSnapshot snapshot = firestore.collection("guild").document("members").get().get();
+                if (!snapshot.exists()) return result;
+
+                Map<String, Object> raw = snapshot.getData();
+                guildMembers = new HashMap<>();
+
+                for (Map.Entry<String, Object> entry : raw.entrySet()) {
+                    Map<String, Object> info = objectMapper.convertValue(entry.getValue(), new TypeReference<>() {});
+                    guildMembers.put(entry.getKey(), info);
+                }
+
+                redisTemplate.opsForHash().putAll("guild:members", guildMembers);
+            } catch (Exception e) {
+                log.error("Failed to fetch guild members from Firestore", e);
+                throw new RuntimeException("Internal error");
+            }
+        } else {
+            guildMembers = new HashMap<>();
+            for (Map.Entry<Object, Object> entry : cachedMembers.entrySet()) {
+                guildMembers.put(
+                        String.valueOf(entry.getKey()),
+                        objectMapper.convertValue(entry.getValue(), new TypeReference<>() {})
+                );
+            }
+        }
+
+        for (Map.Entry<String, Map<String, Object>> entry : guildMembers.entrySet()) {
+            String nickname = entry.getKey();
+            Map<String, Object> info = entry.getValue();
+
+            if (Boolean.TRUE.equals(info.get("banned"))) continue;
+
+            String nicknameLC = nickname.toLowerCase();
+            Map<String, Map<String, String>> heroesUser = getPlayerHeroes(nicknameLC);
+
+            result.put(nickname, heroesUser);
         }
 
         return result;
