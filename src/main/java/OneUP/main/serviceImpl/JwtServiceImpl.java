@@ -6,6 +6,9 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +18,7 @@ import java.time.Duration;
 import java.util.Date;
 
 @Service
+@RequiredArgsConstructor
 public class JwtServiceImpl implements JwtService {
 
 
@@ -23,6 +27,8 @@ public class JwtServiceImpl implements JwtService {
 
     private SecretKey key;
     private final Duration tokenLifetime = Duration.ofDays(1);
+
+    private final HttpServletRequest request;
 
     @PostConstruct
     public void init() {
@@ -52,6 +58,23 @@ public class JwtServiceImpl implements JwtService {
         } catch (JwtException e) {
             return false;
         }
+    }
+
+    public String extractTokenFromRequest() {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("token".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+
+        throw new RuntimeException("JWT token not found in request");
     }
 
     public String extractUsername(String token) {
