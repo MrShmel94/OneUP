@@ -4,6 +4,7 @@ import OneUP.main.exception.InvalidCredentialsException;
 import OneUP.main.exception.UnauthorizedException;
 import OneUP.main.exception.UserNotValidatedException;
 import OneUP.main.model.AppUser;
+import OneUP.main.model.GuildMember;
 import OneUP.main.request.ConfirmRequest;
 import OneUP.main.request.LoginRequest;
 import OneUP.main.request.RegisterRequest;
@@ -38,7 +39,6 @@ public class UserServiceImpl implements UserService {
     private final Firestore firestore = FirestoreClient.getFirestore();
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
 
@@ -105,8 +105,9 @@ public class UserServiceImpl implements UserService {
 
     public void registerUser(RegisterRequest dto) {
         String nickname = dto.nickname().toLowerCase().trim();
-
         DocumentReference userDoc = firestore.collection("users").document(nickname);
+        DocumentReference guildDoc = firestore.collection("guild").document("members");
+
         try {
             if (userDoc.get().get().exists()) {
                 throw new IllegalStateException("Nickname already in use");
@@ -131,8 +132,24 @@ public class UserServiceImpl implements UserService {
 
         try {
             userDoc.set(user).get();
+
+            GuildMember member = GuildMember.builder()
+                    .nickname(nickname)
+                    .fullName(dto.fullName())
+                    .location(dto.location())
+                    .timezone(dto.timezone())
+                    .about(dto.about())
+                    .role("USER")
+                    .isBanned(false)
+                    .confirmCode(code)
+                    .build();
+
+            Map<String, Object> update = Map.of(nickname, member);
+            guildDoc.set(update, SetOptions.merge()).get();
+            redisTemplate.opsForHash().put(REDIS_KEY, nickname, member);
+
         } catch (Exception e) {
-            throw new RuntimeException("Failed to save user", e);
+            throw new RuntimeException("Failed to register user", e);
         }
     }
 
@@ -225,14 +242,21 @@ public class UserServiceImpl implements UserService {
 
             userDoc.update("validated", true).get();
 
-            Map<String, Object> guildData = Map.of(
-                    "role", "USER",
-                    "banned", false
-            );
-            Map<String, Object> update = Map.of(nickname, guildData);
+            GuildMember member = GuildMember.builder()
+                    .nickname(user.getNickname())
+                    .fullName(user.getFullName())
+                    .location(user.getLocation())
+                    .timezone(user.getTimezone())
+                    .about(user.getAbout())
+                    .role("USER")
+                    .isBanned(false)
+                    .confirmCode(null)
+                    .build();
+
+            Map<String, Object> update = Map.of(nickname, member);
             guildDoc.set(update, SetOptions.merge()).get();
 
-            redisTemplate.opsForHash().put(REDIS_KEY, nickname, guildData);
+            redisTemplate.opsForHash().put(REDIS_KEY, nickname, member);
 
             return jwtService.generateToken(nickname);
 
@@ -251,13 +275,12 @@ public class UserServiceImpl implements UserService {
 
             Object cached = redisTemplate.opsForHash().get(REDIS_KEY, key);
             if (cached != null) {
-                Map<String, Object> data = objectMapper.convertValue(cached, new TypeReference<>() {});
-                data.put("role", newRole);
-                redisTemplate.opsForHash().put(REDIS_KEY, key, data);
+                GuildMember member = objectMapper.convertValue(cached, GuildMember.class);
+                member.setRole(newRole);
+                redisTemplate.opsForHash().put(REDIS_KEY, key, member);
             }
 
             log.info("Changed role of {} to {}", key, newRole);
-
         } catch (Exception e) {
             throw new RuntimeException("Failed to change user role", e);
         }

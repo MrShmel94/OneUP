@@ -86,6 +86,7 @@ public class AuthController {
         cookie.setHttpOnly(true);
         cookie.setSecure(true);
         cookie.setPath("/");
+        cookie.setDomain(".onrender.com");
         cookie.setMaxAge((int) Duration.ofDays(1).getSeconds());
 
         response.setHeader("Set-Cookie", String.format(

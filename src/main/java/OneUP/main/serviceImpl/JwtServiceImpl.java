@@ -111,6 +111,7 @@ public class JwtServiceImpl implements JwtService {
         cookie.setHttpOnly(true);
         cookie.setSecure(true);
         cookie.setPath("/");
+        cookie.setDomain(".onrender.com");
         cookie.setMaxAge((int) tokenLifetime.getSeconds());
         response.addCookie(cookie);
     }
