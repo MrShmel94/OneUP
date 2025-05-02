@@ -86,7 +86,7 @@ public class AuthController {
         cookie.setHttpOnly(true);
         cookie.setSecure(true);
         cookie.setPath("/");
-        cookie.setDomain("oneup.onrender.com");
+        cookie.setDomain(".1uppower.club");
         cookie.setMaxAge((int) Duration.ofDays(1).getSeconds());
         response.addCookie(cookie);
     }
