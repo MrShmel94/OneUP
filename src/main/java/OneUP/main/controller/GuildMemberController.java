@@ -21,7 +21,7 @@ public class GuildMemberController {
 
     @GetMapping("/getAllMembers")
     public ResponseEntity<List<GuildMember>> getAllMembers() {
-        return ResponseEntity.ok(guildMembersService.getAllMembers()).build();
+        return ResponseEntity.ok(guildMembersService.getAllMembers());
     }
 
     @PostMapping("/changeRole")
