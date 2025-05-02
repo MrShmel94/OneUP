@@ -111,7 +111,7 @@ public class JwtServiceImpl implements JwtService {
         cookie.setHttpOnly(true);
         cookie.setSecure(true);
         cookie.setPath("/");
-        cookie.setDomain(".1uppower.club");
+        cookie.setDomain("1uppower.club");
         cookie.setMaxAge((int) tokenLifetime.getSeconds());
         response.addCookie(cookie);
     }

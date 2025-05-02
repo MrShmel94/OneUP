@@ -40,9 +40,14 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<Void> login(@RequestBody @Valid LoginRequest request, HttpServletResponse response) {
-        String token = userService.login(request);
-        setTokenCookie(response, token);
-        return ResponseEntity.noContent().build();
+        try {
+            String token = userService.login(request);
+            setTokenCookie(response, token);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @GetMapping("/me")
@@ -86,7 +91,7 @@ public class AuthController {
         cookie.setHttpOnly(true);
         cookie.setSecure(true);
         cookie.setPath("/");
-        cookie.setDomain(".1uppower.club");
+        cookie.setDomain("1uppower.club");
         cookie.setMaxAge((int) Duration.ofDays(1).getSeconds());
         response.addCookie(cookie);
     }
