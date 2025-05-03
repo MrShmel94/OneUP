@@ -2,6 +2,7 @@ package OneUP.main.controller;
 
 import OneUP.main.model.GuildMember;
 import OneUP.main.request.ChangeRoleRequest;
+import OneUP.main.request.ToggleBanRequest;
 import OneUP.main.service.GuildMembersService;
 import OneUP.main.service.UserService;
 import jakarta.validation.Valid;
@@ -30,15 +31,13 @@ public class GuildMemberController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/banned/{nickname}")
-    public ResponseEntity<Void> banned(@PathVariable String nickname) {
-        userService.banned(nickname);
-        return ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/unbanned/{nickname}")
-    public ResponseEntity<Void> unbanned(@PathVariable String nickname) {
-        userService.unbanned(nickname);
+    @PostMapping("/toggleBan")
+    public ResponseEntity<Void> banned(@RequestBody @Valid ToggleBanRequest request) {
+        if(request.isBanned()){
+            userService.banned(request.nickname());
+        }else{
+            userService.unbanned(request.nickname());
+        }
         return ResponseEntity.noContent().build();
     }
 }

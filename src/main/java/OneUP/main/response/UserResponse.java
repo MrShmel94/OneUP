@@ -1,4 +1,4 @@
 package OneUP.main.response;
 
-public record UserResponse(String nickname) {
+public record UserResponse(String nickname, String role) {
 }

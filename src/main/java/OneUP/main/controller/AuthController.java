@@ -4,6 +4,7 @@ import OneUP.main.request.ConfirmRequest;
 import OneUP.main.request.LoginRequest;
 import OneUP.main.request.RegisterRequest;
 import OneUP.main.response.UserResponse;
+import OneUP.main.security.Role;
 import OneUP.main.service.UserService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -58,7 +59,8 @@ public class AuthController {
         }
 
         String username = authentication.getName();
-        return ResponseEntity.ok(new UserResponse(username));
+        String role = userService.checkAccess(Role.USER).toString();
+        return ResponseEntity.ok(new UserResponse(username, role));
     }
 
 
