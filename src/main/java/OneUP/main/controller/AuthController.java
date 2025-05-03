@@ -42,14 +42,9 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<Void> login(@RequestBody @Valid LoginRequest requestObject, HttpServletResponse response, HttpServletRequest request) {
-        try {
-            String token = userService.login(requestObject);
-            setTokenCookie(request, response, token);
-            return ResponseEntity.noContent().build();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        String token = userService.login(requestObject);
+        setTokenCookie(request, response, token);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/me")
