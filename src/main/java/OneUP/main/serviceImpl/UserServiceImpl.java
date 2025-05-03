@@ -172,8 +172,10 @@ public class UserServiceImpl implements UserService {
                 throw new NoSuchElementException("User not found");
             }
             return snapshot.toObject(AppUser.class);
+        } catch (NoSuchElementException e) {
+            throw new NoSuchElementException(String.format("User not found %s", nickname));
         } catch (Exception e) {
-            throw new RuntimeException("Failed to fetch user", e);
+            throw new RuntimeException(String.format("Failed to fetch user -> %s", e.getMessage()));
         }
     }
 
