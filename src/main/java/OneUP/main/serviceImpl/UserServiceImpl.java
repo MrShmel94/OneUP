@@ -8,6 +8,8 @@ import OneUP.main.model.GuildMember;
 import OneUP.main.request.ConfirmRequest;
 import OneUP.main.request.LoginRequest;
 import OneUP.main.request.RegisterRequest;
+import OneUP.main.security.RequireGuildAccess;
+import OneUP.main.security.Role;
 import OneUP.main.service.JwtService;
 import OneUP.main.service.UserService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -17,6 +19,7 @@ import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.SetOptions;
 import com.google.firebase.cloud.FirestoreClient;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -36,7 +39,7 @@ import java.util.NoSuchElementException;
 @Slf4j
 public class UserServiceImpl implements UserService {
 
-    private final Firestore firestore = FirestoreClient.getFirestore();
+    private final Firestore firestore;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -45,62 +48,32 @@ public class UserServiceImpl implements UserService {
     private static final String REDIS_KEY = "guild:members";
 
     @Override
-    public String checkAccess(String requiredRole) {
+    public Role checkAccess(Role requiredRole) {
         String token = jwtService.extractTokenFromRequest();
         String nickname = jwtService.extractUsername(token);
         String redisKey = nickname.toLowerCase();
 
-        Object cached = redisTemplate.opsForHash().get(REDIS_KEY, redisKey);
-        Map<String, Object> userInfo;
-
-        if (cached != null) {
-            userInfo = objectMapper.convertValue(cached, new TypeReference<>() {});
-        } else {
-            try {
-                DocumentSnapshot snapshot = firestore.collection("guild").document("members").get().get();
-                if (!snapshot.exists()) throw new UnauthorizedException("Guild data not found");
-
-                Map<String, Object> raw = snapshot.getData();
-                Map<String, Map<String, Object>> members = new HashMap<>();
-
-                for (Map.Entry<String, Object> entry : raw.entrySet()) {
-                    Map<String, Object> info = objectMapper.convertValue(entry.getValue(), new TypeReference<>() {});
-                    members.put(entry.getKey(), info);
-                }
-
-                redisTemplate.opsForHash().putAll(REDIS_KEY, members);
-                userInfo = members.get(redisKey);
-            } catch (Exception e) {
-                log.error("Failed to read Firestore", e);
-                throw new RuntimeException("Internal error");
-            }
-
-            if (userInfo == null) throw new UnauthorizedException("You are not a guild member");
-        }
+        Map<String, Object> userInfo = getUserInfoFromCacheOrDb(redisKey);
 
         if (Boolean.TRUE.equals(userInfo.get("banned"))) {
             jwtService.clearJwtFromResponse();
             throw new UnauthorizedException("You are banned");
         }
 
-        String actualRole = String.valueOf(userInfo.get("role"));
+        String actualRoleString = String.valueOf(userInfo.get("role"));
+        Role actualRole = Role.valueOf(actualRoleString);
         String tokenRole = jwtService.extractRole(token);
 
-        if (!actualRole.equals(tokenRole)) {
-            String newToken = jwtService.generateToken(nickname, actualRole);
+        if (!actualRole.name().equals(tokenRole)) {
+            String newToken = jwtService.generateToken(nickname, actualRole.name());
             jwtService.setJwtCookieInResponse(newToken);
         }
 
-        if (!hasSufficientRole(actualRole, requiredRole)) {
+        if (!actualRole.hasAtLeast(requiredRole)) {
             throw new AccessDeniedException("Insufficient role: required " + requiredRole + ", but have " + actualRole);
         }
 
         return actualRole;
-    }
-
-    private boolean hasSufficientRole(String actual, String required) {
-        List<String> hierarchy = List.of("USER", "MODERATOR", "ADMIN");
-        return hierarchy.indexOf(actual) >= hierarchy.indexOf(required);
     }
 
     public void registerUser(RegisterRequest dto) {
@@ -139,14 +112,23 @@ public class UserServiceImpl implements UserService {
                     .location(dto.location())
                     .timezone(dto.timezone())
                     .about(dto.about())
-                    .role("USER")
+                    .role(Role.USER.name())
                     .isBanned(false)
                     .confirmCode(code)
                     .build();
 
             Map<String, Object> update = Map.of(nickname, member);
             guildDoc.set(update, SetOptions.merge()).get();
-            redisTemplate.opsForHash().put(REDIS_KEY, nickname, member);
+
+            if (Boolean.FALSE.equals(redisTemplate.hasKey(REDIS_KEY))) {
+                DocumentSnapshot snapshot = firestore.collection("guild").document("members").get().get();
+                if (snapshot.exists()) {
+                    Map<String, Object> raw = snapshot.getData();
+                    redisTemplate.opsForHash().putAll(REDIS_KEY, raw);
+                }
+            } else {
+                redisTemplate.opsForHash().put(REDIS_KEY, nickname, member);
+            }
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to register user", e);
@@ -174,33 +156,7 @@ public class UserServiceImpl implements UserService {
     public String checkAccessWithoutToken(String nickname) {
         String redisKey = nickname.toLowerCase();
 
-        Object cached = redisTemplate.opsForHash().get(REDIS_KEY, redisKey);
-        Map<String, Object> userInfo;
-
-        if (cached != null) {
-            userInfo = objectMapper.convertValue(cached, new TypeReference<>() {});
-        } else {
-            try {
-                DocumentSnapshot snapshot = firestore.collection("guild").document("members").get().get();
-                if (!snapshot.exists()) throw new UnauthorizedException("Guild data not found");
-
-                Map<String, Object> raw = snapshot.getData();
-                Map<String, Map<String, Object>> members = new HashMap<>();
-
-                for (Map.Entry<String, Object> entry : raw.entrySet()) {
-                    Map<String, Object> info = objectMapper.convertValue(entry.getValue(), new TypeReference<>() {});
-                    members.put(entry.getKey(), info);
-                }
-
-                redisTemplate.opsForHash().putAll(REDIS_KEY, members);
-                userInfo = members.get(redisKey);
-            } catch (Exception e) {
-                log.error("Failed to read Firestore", e);
-                throw new RuntimeException("Internal error");
-            }
-
-            if (userInfo == null) throw new UnauthorizedException("You are not a guild member");
-        }
+        Map<String, Object> userInfo = getUserInfoFromCacheOrDb(redisKey);
 
         if (Boolean.TRUE.equals(userInfo.get("banned"))) {
             throw new UnauthorizedException("You are banned");
@@ -265,12 +221,29 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    @RequireGuildAccess(roles = {Role.ADMIN})
     @Override
     public void changeUserRole(String nickname, String newRole) {
         String key = nickname.toLowerCase();
+        String currentUser = jwtService.extractUsername(jwtService.extractTokenFromRequest());
+
+        if (currentUser.equals(key)) {
+            throw new AccessDeniedException("You cannot change your own role");
+        }
+
         DocumentReference guildDoc = firestore.collection("guild").document("members");
 
         try {
+            DocumentSnapshot snapshot = guildDoc.get().get();
+            if (!snapshot.exists()) {
+                throw new RuntimeException("Guild members document not found");
+            }
+
+            Map<String, Object> members = snapshot.getData();
+            if (members == null || !members.containsKey(key)) {
+                throw new NoSuchElementException("Guild member not found: " + key);
+            }
+
             guildDoc.update(key + ".role", newRole).get();
 
             Object cached = redisTemplate.opsForHash().get(REDIS_KEY, key);
@@ -281,18 +254,88 @@ public class UserServiceImpl implements UserService {
             }
 
             log.info("Changed role of {} to {}", key, newRole);
+
+        } catch (NoSuchElementException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to change user role", e);
         }
     }
 
+    @RequireGuildAccess(roles = {Role.ADMIN})
     @Override
     public void banned (String nickname){
 
+        String currentUser = jwtService.extractUsername(jwtService.extractTokenFromRequest());
+
+        if (currentUser.equals(nickname)) {
+            throw new AccessDeniedException("You can't ban yourself");
+        }
+
+        changeBanStatus(nickname, true);
     }
 
+    @RequireGuildAccess(roles = {Role.ADMIN})
     @Override
     public void unbanned (String nickname){
+        String currentUser = jwtService.extractUsername(jwtService.extractTokenFromRequest());
 
+        if (currentUser.equals(nickname)) {
+            throw new AccessDeniedException("You can't ban yourself");
+        }
+
+        changeBanStatus(nickname, false);
+    }
+
+    private Map<String, Object> getUserInfoFromCacheOrDb(String redisKey) {
+        Object cached = redisTemplate.opsForHash().get(REDIS_KEY, redisKey);
+        if (cached != null) {
+            return objectMapper.convertValue(cached, new TypeReference<>() {});
+        }
+
+        try {
+            DocumentSnapshot snapshot = firestore.collection("guild").document("members").get().get();
+            if (!snapshot.exists()) throw new UnauthorizedException("Guild data not found");
+
+            Map<String, Object> raw = snapshot.getData();
+            Map<String, Map<String, Object>> members = new HashMap<>();
+
+            for (Map.Entry<String, Object> entry : raw.entrySet()) {
+                Map<String, Object> info = objectMapper.convertValue(entry.getValue(), new TypeReference<>() {});
+                members.put(entry.getKey(), info);
+            }
+
+            redisTemplate.opsForHash().putAll(REDIS_KEY, members);
+
+            Map<String, Object> result = members.get(redisKey);
+            if (result == null) {
+                throw new UnauthorizedException("You are not a guild member");
+            }
+
+            return members.get(redisKey);
+        } catch (Exception e) {
+            log.error("Failed to read Firestore", e);
+            throw new RuntimeException("Internal error");
+        }
+    }
+
+    private void changeBanStatus(String nickname, boolean banned) {
+        String key = nickname.toLowerCase();
+        DocumentReference guildDoc = firestore.collection("guild").document("members");
+
+        try {
+            guildDoc.update(key + ".banned", banned).get();
+
+            Object cached = redisTemplate.opsForHash().get(REDIS_KEY, key);
+            if (cached != null) {
+                GuildMember member = objectMapper.convertValue(cached, GuildMember.class);
+                member.setBanned(banned);
+                redisTemplate.opsForHash().put(REDIS_KEY, key, member);
+            }
+
+            log.info("User '{}' has been {}", key, banned ? "banned" : "unbanned");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to change ban status for " + key, e);
+        }
     }
 }

@@ -107,33 +107,29 @@ public class JwtServiceImpl implements JwtService {
     }
 
     public void setJwtCookieInResponse(String token) {
+        String domain = request.getServerName().contains("dev.") ? "dev.1uppower.club" : "1uppower.club";
+
         Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
         cookie.setSecure(true);
         cookie.setPath("/");
-        cookie.setDomain("1uppower.club");
+        cookie.setDomain(domain);
         cookie.setMaxAge((int) tokenLifetime.getSeconds());
         response.addCookie(cookie);
     }
 
     public void clearJwtFromResponse() {
-        ResponseCookie cookieStrict = ResponseCookie.from("token", "")
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
-                .path("/")
-                .maxAge(0)
-                .build();
+        String domain = request.getServerName().contains("dev.") ? "dev.1uppower.club" : "1uppower.club";
 
-        ResponseCookie cookieNone = ResponseCookie.from("token", "")
+        ResponseCookie deleteToken = ResponseCookie.from("token", "")
                 .httpOnly(true)
                 .secure(true)
                 .sameSite("None")
                 .path("/")
+                .domain(domain)
                 .maxAge(0)
                 .build();
 
-        response.addHeader(HttpHeaders.SET_COOKIE, cookieStrict.toString());
-        response.addHeader(HttpHeaders.SET_COOKIE, cookieNone.toString());
+        response.setHeader(HttpHeaders.SET_COOKIE, deleteToken.toString());
     }
 }

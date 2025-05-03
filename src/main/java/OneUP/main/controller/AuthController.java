@@ -6,6 +6,7 @@ import OneUP.main.request.RegisterRequest;
 import OneUP.main.response.UserResponse;
 import OneUP.main.service.UserService;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,17 +33,17 @@ public class AuthController {
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<Void> confirm(@RequestBody @Valid ConfirmRequest request, HttpServletResponse response) {
-        String token = userService.confirmUser(request);
-        setTokenCookie(response, token);
+    public ResponseEntity<Void> confirm(@RequestBody @Valid ConfirmRequest requestObject, HttpServletResponse response, HttpServletRequest request) {
+        String token = userService.confirmUser(requestObject);
+        setTokenCookie(request, response, token);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Void> login(@RequestBody @Valid LoginRequest request, HttpServletResponse response) {
+    public ResponseEntity<Void> login(@RequestBody @Valid LoginRequest requestObject, HttpServletResponse response, HttpServletRequest request) {
         try {
-            String token = userService.login(request);
-            setTokenCookie(response, token);
+            String token = userService.login(requestObject);
+            setTokenCookie(request, response, token);
             return ResponseEntity.noContent().build();
         } catch (Exception e) {
             e.printStackTrace();
@@ -62,36 +63,34 @@ public class AuthController {
 
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(HttpServletResponse response) {
-        ResponseCookie cookieStrict = ResponseCookie.from("token", "")
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
-                .path("/")
-                .maxAge(0)
-                .build();
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
 
-        ResponseCookie cookieNone = ResponseCookie.from("token", "")
+        String domain = request.getServerName().contains("dev.") ? "dev.1uppower.club" : "1uppower.club";
+
+        ResponseCookie deleteToken = ResponseCookie.from("token", "")
                 .httpOnly(true)
                 .secure(true)
                 .sameSite("None")
                 .path("/")
+                .domain(domain)
                 .maxAge(0)
                 .build();
 
-        response.addHeader(HttpHeaders.SET_COOKIE, cookieStrict.toString());
-        response.addHeader(HttpHeaders.SET_COOKIE, cookieNone.toString());
+        response.setHeader(HttpHeaders.SET_COOKIE, deleteToken.toString());
 
-        return ResponseEntity.ok("Logged out");
+        return ResponseEntity.ok().build();
     }
 
 
-    private void setTokenCookie(HttpServletResponse response, String token) {
+    private void setTokenCookie(HttpServletRequest request, HttpServletResponse response, String token) {
+
+        String domain = request.getServerName().contains("dev.") ? "dev.1uppower.club" : "1uppower.club";
+
         Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
         cookie.setSecure(true);
         cookie.setPath("/");
-        cookie.setDomain("1uppower.club");
+        cookie.setDomain(domain);
         cookie.setMaxAge((int) Duration.ofDays(1).getSeconds());
         response.addCookie(cookie);
     }

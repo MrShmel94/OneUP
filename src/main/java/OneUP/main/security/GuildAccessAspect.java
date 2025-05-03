@@ -11,6 +11,9 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 
 @Aspect
 @Component
@@ -19,34 +22,14 @@ import java.lang.reflect.Method;
 public class GuildAccessAspect {
 
     private final UserService userService;
-    private final HttpServletRequest request;
 
-    @Before("@annotation(OneUP.main.security.RequireGuildAccess)")
-    public void checkGuildAccess(JoinPoint joinPoint) {
-        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-        Method method = signature.getMethod();
-        RequireGuildAccess annotation = method.getAnnotation(RequireGuildAccess.class);
+    @Before("@annotation(requireGuildAccess)")
+    public void checkGuildAccess(RequireGuildAccess requireGuildAccess) {
+        Role[] roles = requireGuildAccess.roles();
+        Role highestRequired = Arrays.stream(roles)
+                .max(Comparator.comparingInt(Role::ordinal))
+                .orElse(Role.USER);
 
-        String[] allowedRoles = annotation.roles();
-
-        if (allowedRoles.length == 0) {
-            userService.checkAccess("USER");
-        } else {
-            String required = getMostPrivilegedRole(allowedRoles);
-            userService.checkAccess(required);
-        }
-    }
-
-    private String getMostPrivilegedRole(String[] roles) {
-        String[] hierarchy = {"USER", "MODERATOR", "ADMIN"};
-        int maxIndex = -1;
-        for (String r : roles) {
-            for (int i = 0; i < hierarchy.length; i++) {
-                if (hierarchy[i].equalsIgnoreCase(r) && i > maxIndex) {
-                    maxIndex = i;
-                }
-            }
-        }
-        return maxIndex >= 0 ? hierarchy[maxIndex] : "USER";
+        userService.checkAccess(highestRequired);
     }
 }
