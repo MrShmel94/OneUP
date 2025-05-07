@@ -11,6 +11,8 @@ RUN ./gradlew dependencies --no-daemon || true
 
 COPY . .
 
+RUN chmod +x gradlew
+
 RUN ./gradlew build -x test --no-daemon
 
 FROM eclipse-temurin:21-jdk
