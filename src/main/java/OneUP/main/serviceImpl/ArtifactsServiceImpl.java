@@ -1,7 +1,9 @@
 package OneUP.main.serviceImpl;
 
+import OneUP.main.service.ArtifactService;
 import OneUP.main.service.HeroesService;
 import OneUP.main.service.JwtService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
@@ -10,7 +12,6 @@ import com.google.firebase.cloud.FirestoreClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -23,7 +24,7 @@ import java.util.concurrent.ExecutionException;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class HeroesServiceImpl implements HeroesService {
+public class ArtifactsServiceImpl implements ArtifactService {
 
     private final Firestore firestore = FirestoreClient.getFirestore();
     private final JwtService jwtService;
@@ -31,11 +32,11 @@ public class HeroesServiceImpl implements HeroesService {
     private final ObjectMapper objectMapper;
 
 
-    private static final String COLLECTION = "heroes";
-    private static final String REDIS_KEY = "heroes";
+    private static final String COLLECTION = "artifacts";
+    private static final String REDIS_KEY = "artifacts";
 
     @Override
-    public void savePlayerHeroes(String nickname, Map<String, Map<String, String>> heroes) throws ExecutionException, InterruptedException, BadRequestException {
+    public void savePlayerArtifact(String nickname, Map<String, Map<String, String>> artifacts) throws ExecutionException, InterruptedException, BadRequestException {
 
         if(nickname == null || nickname.isEmpty()) {
             nickname = jwtService.extractUsername(jwtService.extractTokenFromRequest());
@@ -48,14 +49,14 @@ public class HeroesServiceImpl implements HeroesService {
 
         firestore.collection(COLLECTION)
                 .document(key)
-                .set(heroes, SetOptions.merge())
+                .set(artifacts, SetOptions.merge())
                 .get();
 
-        redisTemplate.opsForHash().put(REDIS_KEY, key, heroes);
+        redisTemplate.opsForHash().put(REDIS_KEY, key, artifacts);
     }
 
     @Override
-    public Map<String, Map<String, String>> getPlayerHeroes(String nickname)
+    public Map<String, Map<String, String>> getPlayerArtifact(String nickname)
             throws ExecutionException, InterruptedException, BadRequestException {
 
         if (nickname == null || nickname.isEmpty()) {
@@ -71,11 +72,11 @@ public class HeroesServiceImpl implements HeroesService {
             Object cached = redisTemplate.opsForHash().get(REDIS_KEY, key);
 
             if (cached != null) {
-                Map<String, Map<String, String>> heroes = objectMapper.convertValue(
+                Map<String, Map<String, String>> artifacts = objectMapper.convertValue(
                         cached,
                         new TypeReference<>() {}
                 );
-                return heroes;
+                return artifacts;
             }
         } catch (Exception e) {
             log.warn("Redis unavailable or error while reading heroes for '{}': {}", key, e.getMessage());
@@ -113,7 +114,7 @@ public class HeroesServiceImpl implements HeroesService {
     }
 
     @Override
-    public Map<String, Map<String, Map<String, String>>> getAllGuildHeroes() throws BadRequestException, ExecutionException, InterruptedException {
+    public Map<String, Map<String, Map<String, String>>> getAllGuildArtifact() throws BadRequestException, ExecutionException, InterruptedException {
         Map<String, Map<String, Object>> guildMembers;
         Map<String, Map<String, Map<String, String>>> result = new HashMap<>();
 
@@ -153,7 +154,7 @@ public class HeroesServiceImpl implements HeroesService {
             if (Boolean.TRUE.equals(info.get("banned"))) continue;
 
             String nicknameLC = nickname.toLowerCase();
-            Map<String, Map<String, String>> heroesUser = getPlayerHeroes(nicknameLC);
+            Map<String, Map<String, String>> heroesUser = getPlayerArtifact(nicknameLC);
 
             result.put(nickname, heroesUser);
         }
