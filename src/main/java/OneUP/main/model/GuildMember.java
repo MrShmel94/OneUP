@@ -15,7 +15,7 @@ public class GuildMember {
 
     private String nickname;
 
-    @VisibleForRole(Role.VIEWER)
+    @VisibleForRole(Role.ADMIN)
     private String fullName;
     @VisibleForRole(Role.VIEWER)
     private String location;

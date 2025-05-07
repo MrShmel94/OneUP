@@ -1,8 +1,6 @@
-.gradle
-build
-.git
-.gitignore
+.gradle/
+build/
+.idea/
 *.iml
-*.env
-.idea
-Dockerfile
+*.log
+.git
